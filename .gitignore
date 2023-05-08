@@ -1,0 +1,5 @@
+.env
+cloned_repos/
+output/
+__pycache__/
+preprocessed_golang_code.txt

@@ -1,0 +1,8 @@
+requests
+gitpython
+torch
+transformers
+datasets
+sentencepiece
+pickle5
+python-dotenv
