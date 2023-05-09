@@ -6,6 +6,7 @@ from code_review_model import BERTCodeReviewModel, GPT2CodeReviewModel, T5CodeRe
 import threading
 import os
 from concurrent.futures import ThreadPoolExecutor
+from datasets import DatasetDict, load_from_disk
 from dotenv import load_dotenv
 import pprint
 
@@ -19,6 +20,7 @@ train_models = True
 evaluate_models = True
 force_tokenize = False
 prepare_dataset = False
+force_prepare_dataset = False
 
 
 gitlab_token = os.getenv("GITLAB_TOKEN")
@@ -45,11 +47,21 @@ if preprocess_repos:
 # Stage 3: Instantiate different models and train them to compete with each other
 
 def tokenize_model(model, train_dataset, validation_dataset, output_dir):
+    print("output_dir :=====================> ", output_dir)
     if not os.path.exists(output_dir) or force_tokenize:
+        print("training from output_dir :=====================> ", output_dir)
         model.tokenize_dataset(train_dataset, validation_dataset, output_dir)
     return output_dir
 
+def train_model(model, train_dataset, validation_dataset, output_dir):
+    model.train(train_dataset, validation_dataset, output_dir=output_dir)
+
+def prepare_dataset_wrapper(model, dataset_path, force_prepare):
+    prepared_dataset = model.prepare_dataset(dataset_path, force_prepare=force_prepare)
+    return model.model_name, prepared_dataset
+
 if train_models:
+    print("Training models...")
     dataset_path = "preprocessed_golang_code.txt"
     models = [
         BERTCodeReviewModel(),
@@ -57,16 +69,27 @@ if train_models:
         T5CodeReviewModel(),
     ]
 
+
     # Load the dataset
-    dataset = models[0].prepare_dataset(dataset_path)
-    train_dataset = dataset['train']
-    validation_dataset = dataset['validation']
+    prepared_datasets = dict()
+    with ThreadPoolExecutor() as executor:
+        futures = []
+        for model in models:
+            future = executor.submit(prepare_dataset_wrapper, model, dataset_path, force_prepare=force_prepare_dataset)
+            futures.append(future)
+
+        for future in futures:
+            model_name, prepared_dataset = future.result()
+            prepared_datasets[model_name] = prepared_dataset
 
     # Tokenize the dataset and store it in a file, if it doesn't exist or if force_tokenize is set
     tokenized_dirs = []
     with ThreadPoolExecutor() as executor:
         futures = []
         for i, model in enumerate(models):
+            dataset = prepared_datasets[model.model_name]
+            train_dataset = dataset['train']
+            validation_dataset = dataset['validation']
             output_dir = f"tokenized_data_{model.model_name}"
             future = executor.submit(tokenize_model, model, train_dataset, validation_dataset, output_dir)
             futures.append(future)
@@ -80,10 +103,11 @@ if train_models:
         print(f"Training {model.model_name}...")
 
         # Load the tokenized dataset from a file
-        tokenized_dataset = model.load_tokenized_dataset(tokenized_dirs[i])
+        output_dir = f"tokenized_data_{model.model_name}"  # Update the output_dir for each model
+        tokenized_dataset = model.load_tokenized_dataset(output_dir)
 
         # Train the model in a separate thread
-        t = threading.Thread(target=train_model_thread, args=(model, tokenized_dataset["train"], tokenized_dataset["validation"]))
+        t = threading.Thread(target=train_model, args=(model, tokenized_dataset["train"], tokenized_dataset["validation"], output_dir))
         t.start()
         threads.append(t)
 
@@ -92,6 +116,7 @@ if train_models:
         t.join()
 
     print("All models have finished training.")
+
 
 # Stage 4: Evaluate and compare the performance of the models
 if evaluate_models:
