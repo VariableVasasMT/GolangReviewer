@@ -78,8 +78,14 @@ class CodeReviewModel:
                     pickle.dump(prepared_dataset[split], f)
         else:
             for split in ["train", "validation"]:
-                with open(f"{output_dir}/{split}.pkl", "wb") as f:
-                    prepared_dataset = pickle.load(f)
+                try:
+                    with open(f"{output_dir}/{split}.pkl", "rb") as f:
+                        prepared_dataset = pickle.load(f)
+                except Exception as e:
+                    print("Error in loading prepared dataset : ", e, "\n\n File Path : ", f"{output_dir}/{split}.pkl")
+                    prepared_dataset = None
+                    break
+
 
         return prepared_dataset
 
