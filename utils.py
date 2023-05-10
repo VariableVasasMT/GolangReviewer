@@ -1,5 +1,4 @@
 from code_review_model import BERTCodeReviewModel, GPT2CodeReviewModel, T5CodeReviewModel
-from concurrent.futures import ThreadPoolExecutor
 import threading
 
 def prepare_models():
