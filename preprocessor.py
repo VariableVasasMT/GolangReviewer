@@ -15,6 +15,7 @@ class Preprocessor:
     @staticmethod
     def normalize_formatting(file_path):
         try:
+            print(f"Formatting file {file_path}...")
             result = subprocess.run(["gofmt", "-s", file_path], check=True, capture_output=True, text=True)
             return result.stdout
         except subprocess.CalledProcessError as e:
