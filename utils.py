@@ -32,10 +32,11 @@ def train_models_in_threads(models):
         tokenized_dataset = model.load_tokenized_dataset(output_dir)
         print(tokenized_dataset)
 
-        t = threading.Thread(target=train_model, args=(model, tokenized_dataset["train"], tokenized_dataset["validation"]))
-        t.start()
-        threads.append(t)
+        # t = threading.Thread(target=train_model, args=(model, tokenized_dataset["train"], tokenized_dataset["validation"]))
+        train_model(model, tokenized_dataset["train"], tokenized_dataset["validation"])
+        # t.start()
+        # threads.append(t)
 
     # Wait for all threads to finish
-    for t in threads:
-        t.join()
+    # for t in threads:
+    #     t.join()

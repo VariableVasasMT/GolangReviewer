@@ -73,103 +73,49 @@ class CustomDataCollator:
             "attention_mask": torch.stack(padded_attention_mask),
             "labels": torch.stack(padded_labels)
         }
-    
-# def custom_training_step(trainer, model: PreTrainedModel, inputs):
-#     """
-#     Custom training step for the Trainer that computes the loss manually.
-#     """
-#     model.train()
-#     for key, value in inputs.items():
-#         if isinstance(value, torch.Tensor):
-#             inputs[key] = value.to(trainer.args.device)
 
-#     # Get the logits from the model
-#     outputs = model(**inputs)
-#     logits = outputs.logits
-
-#     # Get the labels
-#     labels = inputs["labels"]
-
-#     # Compute the loss
-#     loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
-#     active_loss = labels.view(-1) != -100
-#     active_logits = logits.view(-1, model.config.num_labels).masked_select(active_loss.unsqueeze(1)).view(-1, model.config.num_labels)
-#     active_labels = torch.where(
-#         active_loss, labels.view(-1), torch.tensor(loss_fct.ignore_index).type_as(labels)
-#     )[active_loss]
-
-#     # Debugging print statements
-#     print("Logits shape: ", logits.shape)
-#     print("Labels shape: ", labels.shape)
-#     print("Active loss shape: ", active_loss.shape)
-#     print("Active logits shape: ", active_logits.shape)
-#     print("Active labels shape: ", active_labels.shape)
-
-#     loss = loss_fct(active_logits, active_labels)
-
-#     return loss
-
-# def custom_training_step(trainer, model: PreTrainedModel, inputs):
-#     """
-#     Custom training step for the Trainer that computes the loss manually.
-#     """
-#     model.train()
-#     for key, value in inputs.items():
-#         if isinstance(value, torch.Tensor):
-#             inputs[key] = value.to(trainer.args.device)
-
-#     # Get the logits from the model
-#     outputs = model(**inputs)
-#     logits = outputs.logits
-
-#     # Get the labels
-#     labels = inputs["labels"]
-
-#     # Compute the loss
-#     loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
-#     active_loss = labels.view(-1) != -100
-#     active_logits = logits.view(-1, model.config.num_labels)[active_loss]
-#     active_labels = labels.view(-1)[active_loss]
-
-#     loss = loss_fct(active_logits, active_labels)
-
-#     return loss
-
-def custom_training_step(trainer, model: PreTrainedModel, inputs):
-    """
-    Custom training step for the Trainer that computes the loss manually.
-    """
+def custom_training_step_gpt2(trainer, model, inputs):
+    print("custom_training_step_gpt2")
     model.train()
-    for key, value in inputs.items():
-        if isinstance(value, torch.Tensor):
-            inputs[key] = value.to(trainer.args.device)
 
-    # Get the logits from the model
+    # Reshape the input tensors to have a batch size of 8192
+    inputs = {k: v.repeat(1024, 1) for k, v in inputs.items()}
     outputs = model(**inputs)
     logits = outputs.logits
 
-    # Get the labels
-    labels = inputs["labels"]
+    # Reshape the logits and labels tensors
+    batch_size, seq_length = logits.shape[:2]
+    reshaped_logits = logits.view(batch_size * seq_length, -1)
+    reshaped_labels = inputs["labels"].view(batch_size * seq_length)
 
-    # Debugging print statements
-    print("Logits shape: ", logits.shape)
-    print("Labels shape: ", labels.shape)
-
-    # Compute the loss
     loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
-    active_loss = labels.view(-1) != -100
-    active_logits = logits.view(-1, model.config.num_labels)[active_loss]
-    active_labels = torch.where(
-        active_loss, labels.view(-1), torch.tensor(loss_fct.ignore_index).type_as(labels)
-    )[active_loss]
+    loss = loss_fct(reshaped_logits, reshaped_labels)
+    return loss
 
-    # Debugging print statements
-    print("Active loss shape: ", active_loss.shape)
-    print("Active logits shape: ", active_logits.shape)
-    print("Active labels shape: ", active_labels.shape)
+def custom_training_step_t5(trainer, model, inputs):
+    print("custom_training_step_t5")
+    model.train()
+    outputs = model(input_ids=inputs["input_ids"], labels=inputs["labels"])
+    loss = outputs.loss
+    return loss
+
+def custom_training_step_bert(trainer, model, inputs):
+    print("custom_training_step_bert")
+    model.train()
+
+    # Reshape the input tensors to have a batch size of 4096
+    inputs = {k: v.repeat(512, 1) for k, v in inputs.items()}
+    outputs = model(**inputs)
+    logits = outputs.logits
+
+    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
+    active_loss = inputs["labels"].view(-1) != -100
+    active_logits = logits.view(-1, model.config.num_labels)[active_loss.view(-1)]
+    active_labels = torch.where(
+        active_loss, inputs["labels"].view(-1), torch.tensor(loss_fct.ignore_index).type_as(inputs["labels"])
+    )
 
     loss = loss_fct(active_logits, active_labels)
-
     return loss
 class CodeReviewModel:
     def __init__(self, model_name, model_class, tokenizer_class):
@@ -277,7 +223,7 @@ class CodeReviewModel:
         )
         
         # Set the custom training step for the trainer
-        self.trainer.training_step = custom_training_step.__get__(self.trainer)
+        self.trainer.training_step = self.get_trainer(self.trainer)
         self.trainer.train()
 
 
@@ -289,6 +235,9 @@ class BERTCodeReviewModel(CodeReviewModel):
     def __init__(self):
         super().__init__("bert-base-uncased", BertForSequenceClassification, BertTokenizer)
 
+    def get_trainer(self, trainer):
+        return custom_training_step_bert.__get__(trainer)
+
 
 class GPT2CodeReviewModel(CodeReviewModel):
     def __init__(self):
@@ -298,6 +247,9 @@ class GPT2CodeReviewModel(CodeReviewModel):
 
         # Update the model's configuration
         self.model.config.pad_token_id = self.tokenizer.pad_token_id
+
+    def get_trainer(self, trainer):
+        return custom_training_step_gpt2.__get__(trainer)
 
 class T5CodeReviewModel(CodeReviewModel):
     def __init__(self):
@@ -311,3 +263,6 @@ class T5CodeReviewModel(CodeReviewModel):
         
     def get_collator(self):
         return DataCollatorForTokenClassification(tokenizer=self.tokenizer)
+    
+    def get_trainer(self, trainer):
+        return custom_training_step_t5.__get__(trainer)
