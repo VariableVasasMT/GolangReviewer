@@ -1,5 +1,5 @@
 from code_review_model import BERTCodeReviewModel, GPT2CodeReviewModel, T5CodeReviewModel
-import threading
+import torch
 
 def prepare_models():
     models = [
@@ -10,7 +10,8 @@ def prepare_models():
     return models
 
 def train_model(model, train_dataset, validation_dataset, output_dir="output"):
-    model.train(train_dataset, validation_dataset, output_dir=output_dir)
+    with torch.no_grad():
+        model.train(train_dataset, validation_dataset, output_dir=output_dir)
 
 def prepare_dataset_wrapper(model, dataset_path, force_prepare):
     prepared_dataset = model.prepare_dataset(dataset_path, force_prepare=force_prepare)

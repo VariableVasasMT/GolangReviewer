@@ -4,7 +4,7 @@ import torch
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import datasets
-import pickle5 as pickle
+import pickle
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import Dataset, DataLoader
 from transformers import (BertForSequenceClassification, BertTokenizer,
