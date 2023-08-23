@@ -1,16 +1,18 @@
 # main.py
 
+import faulthandler
+import json
+import os
+import pprint
+
+from dotenv import load_dotenv
+
 from repository_fetcher import RepositoryFetcher
 from repository_manager import RepositoryManager
-from code_review_model import BERTCodeReviewModel, GPT2CodeReviewModel, T5CodeReviewModel
-import threading
-import os
-from concurrent.futures import ThreadPoolExecutor
-from datasets import DatasetDict, load_from_disk
-from dotenv import load_dotenv
-import pprint
-import json
-from utils import prepare_models, prepare_datasets_parallel, train_models_in_threads
+from utils import (prepare_datasets_parallel, prepare_models,
+                   train_models_in_threads)
+
+faulthandler.enable()
 
 load_dotenv()
 

@@ -192,7 +192,7 @@ class CodeReviewModel:
     def get_collator(self):
         return CustomDataCollator(tokenizer=self.tokenizer)
     
-    def train(self, train_dataset, eval_dataset, output_dir="output", num_train_epochs=3, train_batch_size=8, eval_batch_size=8, learning_rate=2e-5):
+    def train(self, train_dataset, eval_dataset, output_dir="output", num_train_epochs=3, train_batch_size=2, eval_batch_size=2, learning_rate=2e-5):
         training_args = TrainingArguments(
             output_dir=output_dir,
             num_train_epochs=num_train_epochs,
